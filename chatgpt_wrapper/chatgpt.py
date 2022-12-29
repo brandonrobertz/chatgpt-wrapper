@@ -144,6 +144,16 @@ class ChatGPT:
             xhr.responseType = 'stream';
             xhr.onreadystatechange = function() {
               var newEvent;
+              if(xhr.status == 429) {
+                  // this will cause an error in the parser because
+                  // it's not base64 encoded, we can use it to sort
+                  // out administrative errors from proper responses
+                  stream_div.innerHTML = `HTTP Error ${xhr.status}`;
+                  const eof_div = document.createElement('DIV');
+                  eof_div.id = "EOF_DIV_ID";
+                  document.body.appendChild(eof_div);
+                  return;
+              }
               if(xhr.readyState == 3 || xhr.readyState == 4) {
                 const newData = xhr.response.substr(xhr.seenBytes);
                 try {
@@ -199,8 +209,9 @@ class ChatGPT:
 
             full_event_message = None
 
+            raw_data = conversation_datas[0].inner_html()
             try:
-                event_raw = base64.b64decode(conversation_datas[0].inner_html())
+                event_raw = base64.b64decode(raw_data)
                 if len(event_raw) > 0:
                     event = json.loads(event_raw)
                     if event is not None:
@@ -210,6 +221,9 @@ class ChatGPT:
                             event["message"]["content"]["parts"]
                         )
             except Exception:
+                if raw_data == "HTTP Error 429":
+                    yield "HTTP Error 429: Too many requests"
+                    break
                 yield (
                     "Failed to read response from ChatGPT.  Tips:\n"
                     " * Try again.  ChatGPT can be flaky.\n"
